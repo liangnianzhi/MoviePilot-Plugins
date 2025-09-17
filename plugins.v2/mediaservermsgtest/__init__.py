@@ -24,7 +24,7 @@ class MediaServerMsgTest(_PluginBase):
     plugin_icon = "mediaplay.png"  # 插件图标文件名
     plugin_version = "1.0"  # 插件版本号
     plugin_author = "liangnianzhi"  # 插件作者
-    author_url = "https://github.com/liangnianzhi/MoviePilot-Plugins"  # 作者主页链接
+    author_url = "https://github.com/liangnianzhi"  # 作者主页链接
     plugin_config_prefix = "mediaservermsgtest_"  # 插件配置项在数据库中的前缀
     plugin_order = 14  # 插件加载顺序，数字越小越先加载
     auth_level = 1  # 插件的权限级别，1表示普通用户可使用
