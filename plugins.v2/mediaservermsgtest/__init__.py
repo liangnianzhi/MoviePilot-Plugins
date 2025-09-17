@@ -22,9 +22,9 @@ class MediaServerMsgTest(_PluginBase):
     plugin_name = "媒体库服务器通知测试版"  # 插件在界面上显示的名称
     plugin_desc = "发送Emby/Jellyfin/Plex服务器的播放、入库等通知消息。新入库时联动TMM命令更新刮削下载缺失图片"  # 插件功能描述
     plugin_icon = "mediaplay.png"  # 插件图标文件名
-    plugin_version = "0.1"  # 插件版本号
-    plugin_author = "null"  # 插件作者
-    author_url = "https://github.com/jxxghp"  # 作者主页链接
+    plugin_version = "1.0"  # 插件版本号
+    plugin_author = "liangnianzhi"  # 插件作者
+    author_url = "https://github.com/liangnianzhi/MoviePilot-Plugins"  # 作者主页链接
     plugin_config_prefix = "mediaservermsgtest_"  # 插件配置项在数据库中的前缀
     plugin_order = 14  # 插件加载顺序，数字越小越先加载
     auth_level = 1  # 插件的权限级别，1表示普通用户可使用
