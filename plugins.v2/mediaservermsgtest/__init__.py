@@ -22,7 +22,7 @@ class MediaServerMsgTest(_PluginBase):
     plugin_name = "媒体库服务器通知测试版"  # 插件在界面上显示的名称
     plugin_desc = "发送Emby/Jellyfin/Plex服务器的播放、入库等通知消息。新入库时联动TMM命令更新刮削下载缺失图片"  # 插件功能描述
     plugin_icon = "mediaplay.png"  # 插件图标文件名
-    plugin_version = "1.1"  # 插件版本号
+    plugin_version = "1.2"  # 插件版本号
     plugin_author = "liangnianzhi"  # 插件作者
     author_url = "https://github.com/liangnianzhi"  # 作者主页链接
     plugin_config_prefix = "mediaservermsgtest_"  # 插件配置项在数据库中的前缀
@@ -451,7 +451,11 @@ class MediaServerMsgTest(_PluginBase):
             logger.info(f"  .strm检查: {media_path} -> 变量二: {variable_two}")
             logger.info(f"  媒体类型: {item_type} -> 变量三: {variable_three}")
             logger.info(f"  API URL: {api_url}")
-            
+
+            # ===== 在日志中输出json_data =====
+            logger.info("构建的JSON数据:")
+            logger.info(json.dumps(json_data, ensure_ascii=False, indent=2))
+
             # 使用subprocess执行curl命令
             result = subprocess.run(
                 curl_command,
