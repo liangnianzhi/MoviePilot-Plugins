@@ -22,7 +22,7 @@ class MediaServerMsgTest(_PluginBase):
     plugin_name = "媒体库服务器通知测试版"  # 插件在界面上显示的名称
     plugin_desc = "发送Emby/Jellyfin/Plex服务器的播放、入库等通知消息。新入库时联动TMM命令更新刮削下载缺失图片"  # 插件功能描述
     plugin_icon = "mediaplay.png"  # 插件图标文件名
-    plugin_version = "1.2"  # 插件版本号
+    plugin_version = "1.3"  # 插件版本号
     plugin_author = "liangnianzhi"  # 插件作者
     author_url = "https://github.com/liangnianzhi"  # 作者主页链接
     plugin_config_prefix = "mediaservermsgtest_"  # 插件配置项在数据库中的前缀
@@ -55,32 +55,32 @@ class MediaServerMsgTest(_PluginBase):
     # ===== 静态配置：媒体路径到变量一的映射 =====
     # 根据媒体文件路径确定变量一的值，按优先级顺序排列
     _path_mapping = [
-        # 动漫类路径 (0-2)
-        (["/media/Movie/Episode/Donghua", "/media/Show/Episode/Donghua"], 0),
-        (["/media/Movie/Episode/Anime", "/media/Show/Episode/Anime"], 1),
-        (["/media/Movie/Episode/Animation", "/media/Show/Episode/Animation"], 2),
+        # 动漫类路径 (1-3)
+        (["/media/Movie/Episode/Donghua", "/media/Show/Episode/Donghua"], 1),
+        (["/media/Movie/Episode/Anime", "/media/Show/Episode/Anime"], 2),
+        (["/media/Movie/Episode/Animation", "/media/Show/Episode/Animation"], 3),
         
-        # 纪录片路径 (3)
-        (["/media/Movie/Documentary", "/media/Show/Documentary"], 3),
+        # 纪录片路径 (4)
+        (["/media/Movie/Documentary", "/media/Show/Documentary"], 4),
         
-        # 真人系列路径 (4-8)
-        (["/media/Movie/Series/SeriesRU", "/media/Show/Series/SeriesRU"], 4),
-        (["/media/Movie/Series/SeriesCN", "/media/Show/Series/SeriesCN"], 5),
-        (["/media/Movie/Series/SeriesKO", "/media/Show/Series/SeriesKO"], 6),
-        (["/media/Movie/Series/SeriesJP", "/media/Show/Series/SeriesJP"], 7),
-        (["/media/Movie/Series/SeriesIN", "/media/Show/Series/SeriesUS"], 8),
+        # 真人系列路径 (5-9)
+        (["/media/Movie/Series/SeriesRU", "/media/Show/Series/SeriesRU"], 5),
+        (["/media/Movie/Series/SeriesCN", "/media/Show/Series/SeriesCN"], 6),
+        (["/media/Movie/Series/SeriesKO", "/media/Show/Series/SeriesKO"], 7),
+        (["/media/Movie/Series/SeriesJP", "/media/Show/Series/SeriesJP"], 8),
+        (["/media/Movie/Series/SeriesIN", "/media/Show/Series/SeriesUS"], 9),
         
-        # 美国系列和综艺国语 (9)
-        (["/media/Movie/Series/SeriesUS", "/media/Show/Zongyi/ZongyiCN"], 9),
+        # 美国系列和综艺国语 (10)
+        (["/media/Movie/Series/SeriesUS", "/media/Show/Zongyi/ZongyiCN"], 10),
         
-        # NSFW和综艺韩语 (10)
-        (["/media/Movie/Series/NSFW", "/media/Show/Zongyi/ZongyiKO"], 10),
+        # NSFW和综艺韩语 (11)
+        (["/media/Movie/Series/NSFW", "/media/Show/Zongyi/ZongyiKO"], 11),
         
-        # 综艺美国 (11)
-        (["/media/Show/Zongyi/ZongyiUS"], 11),
+        # 综艺美国 (12)
+        (["/media/Show/Zongyi/ZongyiUS"], 12),
         
-        # NSFW剧集 (12)
-        (["/media/Show/Episode/NSFW"], 12)
+        # NSFW剧集 (13)
+        (["/media/Show/Episode/NSFW"], 13)
     ]
 
     # ===== 静态配置：服务器图标映射 =====
