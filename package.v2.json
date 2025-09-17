@@ -6,7 +6,7 @@
         "version": "1.0",
         "icon": "mediaplay.png",
         "author": "liangnianzhi",
-        "level": 2
+        "level": 2,
         "history": {
             "v1.0": "变量一使用路径判断",
             "v0.1": "测试使用"
