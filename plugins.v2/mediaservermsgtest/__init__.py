@@ -19,7 +19,7 @@ class MediaServerMsgTest(_PluginBase):
     """媒体服务器消息通知插件类，继承自_PluginBase基类"""
     
     # ===== 插件基本信息配置 =====
-    plugin_name = "媒体库服务器通知测试版"  # 插件在界面上显示的名称
+    plugin_name = "自用测试"  # 插件在界面上显示的名称
     plugin_desc = "发送Emby/Jellyfin/Plex服务器的播放、入库等通知消息。新入库时联动TMM命令更新刮削下载缺失图片"  # 插件功能描述
     plugin_icon = "mediaplay.png"  # 插件图标文件名
     plugin_version = "1.3"  # 插件版本号
