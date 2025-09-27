@@ -22,7 +22,7 @@ class MediaServerMsgTest(_PluginBase):
     plugin_name = "自用测试"  # 插件在界面上显示的名称
     plugin_desc = "发送Emby/Jellyfin/Plex服务器的播放、入库等通知消息。新入库时联动TMM命令更新刮削下载缺失图片"  # 插件功能描述
     plugin_icon = "mediaplay.png"  # 插件图标文件名
-    plugin_version = "1.3"  # 插件版本号
+    plugin_version = "1.4"  # 插件版本号
     plugin_author = "liangnianzhi"  # 插件作者
     author_url = "https://github.com/liangnianzhi"  # 作者主页链接
     plugin_config_prefix = "mediaservermsgtest_"  # 插件配置项在数据库中的前缀
@@ -376,8 +376,9 @@ class MediaServerMsgTest(_PluginBase):
             event_info: Webhook事件信息
         """
         try:
-            # ===== 获取媒体文件路径 =====
+            # ===== 获取媒体文件路径和媒体类型 =====
             media_path = getattr(event_info, 'item_path', None)  # 获取媒体文件路径
+            item_type = getattr(event_info, 'item_type', None)  # 获取媒体类型
             if not media_path:
                 logger.warning("无法获取媒体文件路径，跳过curl命令执行")
                 return
@@ -390,16 +391,22 @@ class MediaServerMsgTest(_PluginBase):
             
             # ===== 确定变量二：根据媒体路径（.strm文件处理） =====
             variable_two = ""  # 默认为空字符串
-            
             if media_path and media_path.endswith('.strm'):  # 如果是.strm文件
-                # 获取上一层级路径
-                variable_two = os.path.dirname(media_path)
-                logger.info(f"检测到.strm文件，变量二设置为: {variable_two}")
+                # 获取datesource路径
+                if item_type == "MOV":  # 电影类型
+                    # 取上一层路径
+                    variable_two = os.path.dirname(media_path)
+                    logger.info(f"检测到.strm文件，新增电影类型，变量二设置为: {variable_two}")
+                elif item_type in ["TV", "SHOW"]:  # 剧集类型
+                    # 取上两层路径
+                    variable_two = os.path.dirname(os.path.dirname(media_path))
+                    logger.info(f"检测到.strm文件，新增剧集类型，变量二设置为: {variable_two}")
+                else:
+                    logger.warning(f"媒体类型识别错误")
             else:
                 logger.info("非.strm文件，变量二保持为空")
             
             # ===== 确定变量三：根据媒体类型 =====
-            item_type = getattr(event_info, 'item_type', None)  # 获取媒体类型
             if item_type == "MOV":  # 电影类型
                 variable_three = "movies"
             elif item_type in ["TV", "SHOW"]:  # 剧集类型
