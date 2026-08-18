@@ -1,9 +1,9 @@
 {
-  "MediaServerMsgTest": {
-    "name": "自用测试",
-    "description": "发送Emby/Jellyfin/Plex服务器的播放、入库等通知消息。新入库时联动TMM命令更新刮削下载缺失图片",
+  "MediaServerMsgTMM": {
+    "name": "媒体库服务器通知自用版",
+    "description": "发送Emby/Jellyfin/Plex服务器的播放、入库等通知消息，入库后可自动触发TMM。",
     "labels": "Emby,消息通知,媒体库",
-    "version": "0.1.0",
+    "version": "2.2.0",
     "icon": "mediaplay.png",
     "author": "liangnianzhi",
     "level": 1,
