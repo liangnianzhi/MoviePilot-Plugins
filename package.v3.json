@@ -1,0 +1,20 @@
+{
+  "MediaServerMsgTest": {
+    "name": "自用测试",
+    "description": "发送Emby/Jellyfin/Plex服务器的播放、入库等通知消息。新入库时联动TMM命令更新刮削下载缺失图片",
+    "labels": "Emby,消息通知,媒体库",
+    "version": "0.1.0",
+    "icon": "mediaplay.png",
+    "author": "liangnianzhi",
+    "level": 1,
+    "history": {
+      "v0.0.6": "电影剧集分开设置下载缺失图片路径",
+      "v0.0.5": "调整变量一的序号，非从0开始而是1",
+      "v0.0.4": "添加日志",
+      "v0.0.3": "路径修改",
+      "v0.0.2": "变量一使用路径判断",
+      "v0.0.1": "测试使用"
+    },
+    "system_version": ">=3.0.0"
+  }
+}
