@@ -77,17 +77,33 @@ class MediaServerMsgTMM(_PluginBase):
     _tmm_port = DEFAULT_TMM_PORT               # TMM HTTP API 端口
     _tmm_api_key = ""                          # TMM HTTP API Key（Header: api-key）
     _tmm_actions = []                          # 入库后要执行的动作列表
-    _tmm_scope = "path"                        # 作用范围：new / path / all
     _tmm_subtitle_lang = ""                    # 字幕下载语言 ISO 代码
     _tmm_only_missing = True                   # 仅下载缺失的预告片/字幕
+    _tmm_path_map = []                         # 路径映射列表 [(源前缀, 目标前缀)]
+    # 电影端点 scope 配置
+    _tmm_movie_update_path_level = "parent"   # update 的 path 层级：file/parent/grandparent
+    _tmm_movie_other_scope = "new"             # scrape 及其他动作 scope：new/path
+    # 剧集端点 scope 配置
+    _tmm_tv_update_scope = "show"              # update 的 scope：path/show
+    _tmm_tv_update_path_level = "grandparent"  # update 当 scope=path 时的层级：file/parent/grandparent/great_grandparent
+    _tmm_tv_other_scope = "new"                # scrape 及其他动作 scope：new/path
 
     # Webhook事件映射配置
     _webhook_actions = {
         "library.new": "新入库",
         "ItemAdded": "新入库",
+        "library.remove": "移除",
+        "ItemRemove": "移除",
+        "media.remove": "移除",
         "system.notificationtest": "测试",
         "playback.start": "开始播放",
         "playback.stop": "停止播放",
+        "playback.pause": "暂停播放",
+        "PlaybackPause": "暂停播放",
+        "media.pause": "暂停播放",
+        "playback.resume": "恢复播放",
+        "PlaybackResume": "恢复播放",
+        "media.resume": "恢复播放",
         "user.authenticated": "登录成功",
         "user.authenticationfailed": "登录失败",
         "media.play": "开始播放",
@@ -149,9 +165,14 @@ class MediaServerMsgTMM(_PluginBase):
             self._tmm_port = int(config.get("tmm_port") or self.DEFAULT_TMM_PORT)
             self._tmm_api_key = config.get("tmm_api_key") or ""
             self._tmm_actions = config.get("tmm_actions") or []
-            self._tmm_scope = config.get("tmm_scope") or "path"
             self._tmm_subtitle_lang = config.get("tmm_subtitle_lang") or ""
             self._tmm_only_missing = config.get("tmm_only_missing", True)
+            self._tmm_path_map = self._tmm_parse_path_map(config.get("tmm_path_map") or "")
+            self._tmm_movie_update_path_level = config.get("tmm_movie_update_path_level") or "parent"
+            self._tmm_movie_other_scope = config.get("tmm_movie_other_scope") or "new"
+            self._tmm_tv_update_scope = config.get("tmm_tv_update_scope") or "show"
+            self._tmm_tv_update_path_level = config.get("tmm_tv_update_path_level") or "grandparent"
+            self._tmm_tv_other_scope = config.get("tmm_tv_other_scope") or "new"
 
     def service_infos(self, type_filter: Optional[str] = None) -> Optional[Dict[str, ServiceInfo]]:
         """
@@ -235,17 +256,34 @@ class MediaServerMsgTMM(_PluginBase):
         """
         types_options = [
             {"title": "新入库", "value": "library.new|ItemAdded"},
+            {"title": "媒体移除", "value": "library.remove|ItemRemove|media.remove"},
             {"title": "开始播放", "value": "playback.start|media.play|PlaybackStart"},
             {"title": "停止播放", "value": "playback.stop|media.stop|PlaybackStop"},
+            {"title": "暂停播放", "value": "playback.pause|media.pause|PlaybackPause"},
+            {"title": "恢复播放", "value": "playback.resume|media.resume|PlaybackResume"},
             {"title": "用户标记", "value": "item.rate"},
             {"title": "测试", "value": "system.notificationtest"},
             {"title": "登录成功", "value": "user.authenticated"},
             {"title": "登录失败", "value": "user.authenticationfailed"},
         ]
-        tmm_scope_options = [
-            {"title": "按路径精确触发（推荐）", "value": "path"},
-            {"title": "仅新条目", "value": "new"},
-            {"title": "全部条目", "value": "all"},
+        movie_update_level_options = [
+            {"title": "电影文件层级（最底层文件）", "value": "file"},
+            {"title": "电影文件夹层级（父目录，推荐）", "value": "parent"},
+            {"title": "类别电影文件夹层级（祖父目录）", "value": "grandparent"},
+        ]
+        scope_new_path_options = [
+            {"title": "仅新条目 new（推荐）", "value": "new"},
+            {"title": "按路径 path", "value": "path"},
+        ]
+        tv_update_scope_options = [
+            {"title": "show（按剧集文件夹，推荐）", "value": "show"},
+            {"title": "path（按路径）", "value": "path"},
+        ]
+        tv_update_path_level_options = [
+            {"title": "集文件层级（最底层文件）", "value": "file"},
+            {"title": "季文件夹层级（父目录）", "value": "parent"},
+            {"title": "剧集文件夹层级（祖父目录，推荐）", "value": "grandparent"},
+            {"title": "类别剧集文件夹层级（曾祖父目录）", "value": "great_grandparent"},
         ]
         return [
             {
@@ -510,11 +548,169 @@ class MediaServerMsgTMM(_PluginBase):
                                 'props': {'cols': 12, 'md': 6},
                                 'content': [
                                     {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'tmm_subtitle_lang',
+                                            'label': '字幕下载语言（ISO 代码）',
+                                            'placeholder': '例如 zh / en / de，留空则使用 TMM 默认'
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    # ============ 电影 (movie) 端点 scope ============
+                    {
+                        'component': 'VRow',
+                        'props': {'show': '{{tmm_enabled}}'},
+                        'content': [
+                            {
+                                'component': 'VCol',
+                                'props': {'cols': 12},
+                                'content': [
+                                    {
+                                        'component': 'VCardSubtitle',
+                                        'props': {'text': '电影 (movie) 端点 scope'}
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        'component': 'VRow',
+                        'props': {'show': '{{tmm_enabled}}'},
+                        'content': [
+                            {
+                                'component': 'VCol',
+                                'props': {'cols': 12, 'md': 6},
+                                'content': [
+                                    {
                                         'component': 'VSelect',
                                         'props': {
-                                            'model': 'tmm_scope',
-                                            'label': 'TMM 作用范围',
-                                            'items': tmm_scope_options
+                                            'model': 'tmm_movie_update_path_level',
+                                            'label': 'update 的 path 层级（scope 固定 path）',
+                                            'items': movie_update_level_options
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {'cols': 12, 'md': 6},
+                                'content': [
+                                    {
+                                        'component': 'VSelect',
+                                        'props': {
+                                            'model': 'tmm_movie_other_scope',
+                                            'label': 'scrape 及其他动作 scope（path 时层级固定=电影文件夹）',
+                                            'items': scope_new_path_options
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    # ============ 剧集 (tvshow) 端点 scope ============
+                    {
+                        'component': 'VRow',
+                        'props': {'show': '{{tmm_enabled}}'},
+                        'content': [
+                            {
+                                'component': 'VCol',
+                                'props': {'cols': 12},
+                                'content': [
+                                    {
+                                        'component': 'VCardSubtitle',
+                                        'props': {'text': '剧集 (tvshow) 端点 scope'}
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        'component': 'VRow',
+                        'props': {'show': '{{tmm_enabled}}'},
+                        'content': [
+                            {
+                                'component': 'VCol',
+                                'props': {'cols': 12, 'md': 6},
+                                'content': [
+                                    {
+                                        'component': 'VSelect',
+                                        'props': {
+                                            'model': 'tmm_tv_update_scope',
+                                            'label': 'update 的 scope',
+                                            'items': tv_update_scope_options
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {'cols': 12, 'md': 6,
+                                           'show': "{{ tmm_tv_update_scope === 'path' }}"},
+                                'content': [
+                                    {
+                                        'component': 'VSelect',
+                                        'props': {
+                                            'model': 'tmm_tv_update_path_level',
+                                            'label': 'update 当 scope=path 时的层级',
+                                            'items': tv_update_path_level_options
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        'component': 'VRow',
+                        'props': {'show': '{{tmm_enabled}}'},
+                        'content': [
+                            {
+                                'component': 'VCol',
+                                'props': {'cols': 12, 'md': 6},
+                                'content': [
+                                    {
+                                        'component': 'VSelect',
+                                        'props': {
+                                            'model': 'tmm_tv_other_scope',
+                                            'label': 'scrape 及其他动作 scope（path 时层级固定=剧集文件夹）',
+                                            'items': scope_new_path_options
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {'cols': 12, 'md': 6},
+                                'content': [
+                                    {
+                                        'component': 'VSwitch',
+                                        'props': {
+                                            'model': 'tmm_only_missing',
+                                            'label': '仅下载缺失的预告片/字幕/封面',
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    # ============ 路径映射 ============
+                    {
+                        'component': 'VRow',
+                        'props': {'show': '{{tmm_enabled}}'},
+                        'content': [
+                            {
+                                'component': 'VCol',
+                                'props': {'cols': 12},
+                                'content': [
+                                    {
+                                        'component': 'VTextarea',
+                                        'props': {
+                                            'model': 'tmm_path_map',
+                                            'label': '路径映射（每行一条，格式：源前缀=>目标前缀）',
+                                            'placeholder': '/mnt/TV/=>Z:/TV/\n/mnt/Movie/=>Z:/Movie/',
+                                            'rows': 3
                                         }
                                     }
                                 ]
@@ -538,39 +734,6 @@ class MediaServerMsgTMM(_PluginBase):
                                             'model': 'tmm_actions',
                                             'label': '入库后执行的 TMM 动作（按 TMM 文档顺序执行）',
                                             'items': self._tmm_action_options
-                                        }
-                                    }
-                                ]
-                            }
-                        ]
-                    },
-                    {
-                        'component': 'VRow',
-                        'props': {'show': '{{tmm_enabled}}'},
-                        'content': [
-                            {
-                                'component': 'VCol',
-                                'props': {'cols': 12, 'md': 6},
-                                'content': [
-                                    {
-                                        'component': 'VTextField',
-                                        'props': {
-                                            'model': 'tmm_subtitle_lang',
-                                            'label': '字幕下载语言（ISO 代码）',
-                                            'placeholder': '例如 zh / en / de，留空则使用 TMM 默认'
-                                        }
-                                    }
-                                ]
-                            },
-                            {
-                                'component': 'VCol',
-                                'props': {'cols': 12, 'md': 6},
-                                'content': [
-                                    {
-                                        'component': 'VSwitch',
-                                        'props': {
-                                            'model': 'tmm_only_missing',
-                                            'label': '仅下载缺失的预告片/字幕/封面',
                                         }
                                     }
                                 ]
@@ -632,9 +795,14 @@ class MediaServerMsgTMM(_PluginBase):
             "tmm_port": self.DEFAULT_TMM_PORT,
             "tmm_api_key": "",
             "tmm_actions": [],
-            "tmm_scope": "path",
             "tmm_subtitle_lang": "",
             "tmm_only_missing": True,
+            "tmm_path_map": "",
+            "tmm_movie_update_path_level": "parent",
+            "tmm_movie_other_scope": "new",
+            "tmm_tv_update_scope": "show",
+            "tmm_tv_update_path_level": "grandparent",
+            "tmm_tv_other_scope": "new",
         }
 
     def get_page(self) -> List[dict]:
@@ -689,29 +857,139 @@ class MediaServerMsgTMM(_PluginBase):
             logger.error(f"TMM HTTP API 调用异常 url={url}: {str(e)}")
             return None
 
-    def _tmm_build_scope(self, paths: List[str]) -> Dict[str, Any]:
+    def _tmm_parse_path_map(self, text: Any) -> List[Tuple[str, str]]:
         """
-        构造 TMM scope 对象。
-        - 当 scope == path 且 paths 非空：按路径精确
-        - 否则直接用配置的 scope（new / all）
+        解析路径映射文本为列表。
+        每行一条，格式：源前缀=>目标前缀
         """
-        scope_name = self._tmm_scope
-        if scope_name == "path" and paths:
-            return {"name": "path", "args": list(paths)}
-        if scope_name == "path":
-            return {"name": "new"}
-        return {"name": scope_name}
+        mappings: List[Tuple[str, str]] = []
+        for line in str(text or "").splitlines():
+            line = line.strip()
+            if not line or "=>" not in line:
+                continue
+            src, dst = line.split("=>", 1)
+            src = src.strip()
+            dst = dst.strip()
+            if src and dst:
+                mappings.append((src, dst))
+        return mappings
 
-    def _tmm_build_commands(self, paths: List[str]) -> List[Dict[str, Any]]:
+    def _tmm_apply_path_map(self, path: Any) -> str:
+        """
+        对单条路径应用路径映射，把媒体服务器侧路径转换为 TMM 侧路径。
+        未命中映射时原样返回。
+        """
+        if not path:
+            return ""
+        p = str(path)
+        if not self._tmm_path_map:
+            return p
+        for src, dst in self._tmm_path_map:
+            if p.startswith(src):
+                return dst + p[len(src):]
+        return p
+
+    def _tmm_normalize_path(self, item_path: Any, level: str) -> Optional[str]:
+        """
+        根据层级返回归一化后的路径。
+        层级含义（假设 item_path 为最底层文件路径）：
+          - file              : 文件本身
+          - parent            : 父目录（电影文件夹 / 季文件夹）
+          - grandparent       : 祖父目录（类别电影文件夹 / 剧集文件夹）
+          - great_grandparent : 曾祖父目录（类别剧集文件夹）
+        """
+        try:
+            p = Path(str(item_path))
+            if level == "file":
+                return str(p)
+            if level == "parent":
+                return str(p.parent)
+            if level == "grandparent":
+                return str(p.parent.parent)
+            if level == "great_grandparent":
+                return str(p.parent.parent.parent)
+            return str(p)
+        except Exception:
+            return None
+
+    def _tmm_normalize_paths(self, paths: List[str], level: str) -> List[str]:
+        """
+        按指定层级归一化路径列表，并去重，保证一次入库多集时
+        传给 TMM 的 args 不会出现重复路径。
+        """
+        normalized: List[str] = []
+        seen = set()
+        for p in paths:
+            if not p:
+                continue
+            np = self._tmm_normalize_path(p, level)
+            if not np:
+                continue
+            if np not in seen:
+                seen.add(np)
+                normalized.append(np)
+        return normalized
+
+    def _tmm_build_scope_for_action(self, action: str, module: str,
+                                     paths: List[str]) -> Dict[str, Any]:
+        """
+        根据动作与模块构造 TMM scope 对象。
+        规则（对应需求 2.1 / 2.2）：
+        - movie.update        : scope 固定 path，层级 = _tmm_movie_update_path_level
+        - movie 其他动作     : scope = _tmm_movie_other_scope，path 时层级固定 parent
+        - tvshow.update       : scope = _tmm_tv_update_scope
+                                - show 时层级固定 grandparent
+                                - path 时层级 = _tmm_tv_update_path_level
+        - tvshow 其他动作     : scope = _tmm_tv_other_scope，path 时层级固定 grandparent
+        路径为空时统一降级为 new，避免完全不触发。
+        """
+        is_update = (action == "update")
+        if module == "movie":
+            if is_update:
+                level = self._tmm_movie_update_path_level or "parent"
+                normalized = self._tmm_normalize_paths(paths, level)
+                if normalized:
+                    return {"name": "path", "args": normalized}
+                return {"name": "new"}
+            # 电影其他动作
+            if self._tmm_movie_other_scope == "path":
+                normalized = self._tmm_normalize_paths(paths, "parent")
+                if normalized:
+                    return {"name": "path", "args": normalized}
+                return {"name": "new"}
+            return {"name": "new"}
+        # tvshow
+        if is_update:
+            if self._tmm_tv_update_scope == "show":
+                normalized = self._tmm_normalize_paths(paths, "grandparent")
+                if normalized:
+                    return {"name": "show", "args": normalized}
+                return {"name": "new"}
+            # path
+            level = self._tmm_tv_update_path_level or "grandparent"
+            normalized = self._tmm_normalize_paths(paths, level)
+            if normalized:
+                return {"name": "path", "args": normalized}
+            return {"name": "new"}
+        # 剧集其他动作
+        if self._tmm_tv_other_scope == "path":
+            normalized = self._tmm_normalize_paths(paths, "grandparent")
+            if normalized:
+                return {"name": "path", "args": normalized}
+            return {"name": "new"}
+        return {"name": "new"}
+
+    def _tmm_build_commands(self, module: str, paths: List[str]) -> List[Dict[str, Any]]:
         """
         根据用户勾选的动作，构造 TMM 命令数组。
-        多个动作合并成一次请求，以保留 new 标记。
+        每个动作各自构造 scope（update 与其他动作可并存不同 scope），
+        多个动作合并成一次请求以保留 new 标记。
         """
         if not self._tmm_actions:
             return []
-        scope = self._tmm_build_scope(paths)
         commands: List[Dict[str, Any]] = []
         for action in self._tmm_actions:
+            scope = self._tmm_build_scope_for_action(action, module, paths)
             cmd: Dict[str, Any] = {"action": action, "scope": scope}
             if action in ("downloadSubtitle", "downloadTrailer", "downloadMissingArtwork"):
                 args: Dict[str, Any] = {"onlyMissing": bool(self._tmm_only_missing)}
@@ -726,22 +1004,23 @@ class MediaServerMsgTMM(_PluginBase):
         """
         媒体入库后触发 TMM。
         :param item_type: WebhookEventInfo.item_type（MOV/TV/SHOW 等）
-        :param paths: 媒体文件/目录路径列表（当 scope=path 时使用）
+        :param paths: 媒体文件/目录路径列表（媒体服务器侧原始路径）
         :param use_thread: 是否放到后台线程调用（避免阻塞 Webhook 处理）
         """
         if not self._tmm_enabled or not self._tmm_actions:
             return
         module = self._tmm_module_for_item_type(item_type)
-        clean_paths: List[str] = []
+        # 应用路径映射，将媒体服务器侧路径转换为 TMM 侧路径
+        mapped_paths: List[str] = []
         for p in (paths or []):
             if p:
-                clean_paths.append(str(p))
-        commands = self._tmm_build_commands(clean_paths)
+                mapped_paths.append(self._tmm_apply_path_map(p))
+        commands = self._tmm_build_commands(module, mapped_paths)
         if not commands:
             return
 
         def _do():
-            logger.info(f"触发 TMM module={module} actions={[c['action'] for c in commands]} paths={clean_paths}")
+            logger.info(f"触发 TMM module={module} actions={[c['action'] for c in commands]} paths={mapped_paths}")
             result = self._tmm_post(module, commands)
             logger.debug(f"TMM 返回: {result}")
 
