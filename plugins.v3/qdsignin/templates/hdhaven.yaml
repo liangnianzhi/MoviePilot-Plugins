@@ -1,0 +1,35 @@
+# 栖影 HDHaven —— 账号密码登录 + 接口签到
+# 账号配置里可加 mode: normal / mode: gamble 决定普通签到还是赌狗签到
+id: hdhaven
+name: 栖影 HDHaven
+url: https://hdhaven.com
+
+login:
+  - goto: /login
+  - fill: {selector: "#username", value: "{username}"}
+  - fill: {selector: "#password", value: "{password}"}
+  - click: "button[type=submit]"
+  - wait: {ms: 4000}
+
+checkin:
+  - goto: /me
+  - assert:
+      script: "location.pathname.indexOf('login') === -1"
+      msg: "登录失败：账号或密码不对，或站点要求人机验证"
+  - api: {method: GET, url: /api/auth/me, ok_status: [200], save: me}
+  - api:
+      when: "mode != 'gamble' and not (me or {}).get('data', {}).get('checkin_today')"
+      method: POST
+      url: /api/account/checkin
+      ok_status: [200, 201, 409]
+      save: result
+  - api:
+      when: "mode == 'gamble' and not (me or {}).get('data', {}).get('checkin_today')"
+      method: POST
+      url: /api/account/checkin/gamble
+      ok_status: [200, 201, 409]
+      save: result
+  - api: {method: GET, url: /api/auth/me, ok_status: [200], save: after}
+
+success_if: "(after or me or {}).get('data', {}).get('checkin_today') is True"
+fail_keywords: ["请先登录", "未登录", "用户名或密码错误", "密码错误", "账号或密码错误"]

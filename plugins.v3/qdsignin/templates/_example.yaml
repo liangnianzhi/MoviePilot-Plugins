@@ -1,0 +1,48 @@
+# 模板编写说明（复制本文件改名即成为新站点模板）
+# 文件名即模板名，例如 my-site.yaml → 账号配置里写 template: my-site
+#
+# 步骤是一个列表，每步是「单键字典」，键是动作名，值是动作参数。
+# 占位符：{url} {username} {password}，以及账号配置里的任意字段（如 {mode}）
+#
+# 常用动作：
+#   goto        goto: /login                 打开页面（相对路径自动拼 url）
+#   fill        {selector: "#username", value: "{username}"}
+#   click       "button[type=submit]"        点击
+#   press       {selector: "#password", key: Enter}
+#   wait        {selector: ".user-name"} / {text: "退出"} / {url: "**/me"} / {ms: 2000}
+#   sleep       2                            固定等待秒数
+#   text        "body"                       把页面文本纳入关键词判定
+#   js          {script: "() => document.title", save: title}
+#   api         {method: POST, url: /api/checkin, body: {...}, headers: {...}, ok_status: [200], save: r}
+#   assert      "document.title.includes('首页')"   JS 断言，不通过即失败
+#   expect      {selector: ".ok"} / {text: "签到成功"}
+#   screenshot  "checkin"                    截图到 /config/plugins/QdSignin/shots
+#   reload / back
+#
+# 修饰键：
+#   when: "mode == 'gamble'"     条件为真才执行（Python 表达式，可用账号字段和 api 保存的变量）
+#   optional: true               该步骤失败不中断
+#
+# 判定（按顺序生效）：
+#   fail_if / already_if / success_if   Python 表达式，可引用 api 保存的变量
+#   success_keywords / already_keywords / fail_keywords   页面与接口文本关键词
+
+id: example
+name: 示例站点
+url: https://example.com
+
+login:
+  - goto: /login
+  - fill: {selector: "#username", value: "{username}"}
+  - fill: {selector: "#password", value: "{password}"}
+  - click: "button[type=submit]"
+  - wait: {selector: "a[href*='logout']", timeout: 30}
+
+checkin:
+  - goto: /checkin
+  - click: "button:has-text('签到')"
+  - text: "body"
+
+success_keywords: ["签到成功", "已签到"]
+already_keywords: ["今日已签到", "已经签到"]
+fail_keywords: ["请先登录", "未登录"]
