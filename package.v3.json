@@ -23,13 +23,14 @@
     "name": "QD 签到",
     "description": "用账号密码登录站点并自动签到，签到逻辑由 YAML 模板驱动（goto/fill/click/wait/api 等步骤）。",
     "labels": "签到",
-    "version": "1.0",
+    "version": "1.1",
     "icon": "signin.png",
     "author": "liangnianzhi",
     "level": 1,
     "system_version": ">=3.0.0",
     "history": {
-      "v1.0": "首个版本：账号密码登录、YAML 模板驱动签到、历史记录、定时执行。"
+      "v1.0": "首个版本：账号密码登录、YAML 模板驱动签到、历史记录、定时执行。",
+      "v1.1": "goto 增加瞬时网络错误重试；新增 turnstile 动作；登录失败提示带页面 URL 与站点提示；模板支持 cookie 登录跳过登录流程"
     }
   }
 }

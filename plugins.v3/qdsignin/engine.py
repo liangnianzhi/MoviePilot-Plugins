@@ -34,6 +34,7 @@ QdSignin 签到模板引擎
     screenshot 截图           "name"
     reload    重新加载当前页
     back      后退
+    turnstile 等人机验证        {sitekey: "0x...", timeout: 60, save: ts}
 
 通用修饰键：
     when      仅当条件为真才执行（Python 表达式，可用账号字段，如 when: "sign_type == 'gamble'"）
@@ -55,6 +56,47 @@ from app.log import logger
 PLACEHOLDER = re.compile(r"\{([a-zA-Z_][a-zA-Z0-9_]*)\}")
 
 SHOT_DIR = "/config/plugins/QdSignin/shots"
+
+NET_ERRORS = (
+    "ERR_CONNECTION_CLOSED",
+    "ERR_CONNECTION_RESET",
+    "ERR_CONNECTION_ABORTED",
+    "ERR_TIMED_OUT",
+    "ERR_PROXY_CONNECTION_FAILED",
+    "ERR_TUNNEL_CONNECTION_FAILED",
+    "ERR_NAME_NOT_RESOLVED",
+    "ERR_EMPTY_RESPONSE",
+    "ERR_SOCKET_NOT_CONNECTED",
+    "ERR_NETWORK_CHANGED",
+)
+
+TS_POLL_JS = """() => {
+  const nodes = Array.from(document.querySelectorAll('input[name*="turnstile"], textarea[name*="turnstile"]'));
+  for (const node of nodes) { if (node.value && node.value.length > 20) return node.value; }
+  if (window.__qdTsToken && window.__qdTsToken.length > 20) return window.__qdTsToken;
+  try {
+    if (window.turnstile && window.turnstile.getResponse) {
+      const token = window.turnstile.getResponse();
+      if (token && token.length > 20) return token;
+    }
+  } catch (e) {}
+  return '';
+}"""
+
+TS_RENDER_JS = """(sitekey) => {
+  if (!window.turnstile || !window.turnstile.render) return 'no-api';
+  if (window.__qdTsRendered) return 'already';
+  const box = document.createElement('div');
+  box.id = '__qd_turnstile';
+  box.style.cssText = 'position:fixed;left:-9999px;top:0;width:300px;height:80px;';
+  document.body.appendChild(box);
+  window.__qdTsToken = '';
+  try {
+    window.turnstile.render('#__qd_turnstile', {sitekey: sitekey, callback: (token) => { window.__qdTsToken = token; }});
+    window.__qdTsRendered = true;
+    return 'rendered';
+  } catch (e) { return 'err:' + e.message; }
+}"""
 
 CF_MARKERS = (
     "Just a moment",
@@ -176,9 +218,33 @@ class SiteRunner:
     def act_goto(self, spec: Any) -> None:
         url = spec if isinstance(spec, str) else spec.get("url", "")
         wait_until = "domcontentloaded" if isinstance(spec, str) else spec.get("wait_until", "domcontentloaded")
+        default_retry = self.opt.get("goto_retry", 3)
+        retry = int(float(default_retry if isinstance(spec, str) else spec.get("retry", default_retry)))
+        retry = max(retry, 1)
         target = self.absolute(render(url, self.ctx()))
         self.log(f"打开 {target}")
-        self.page.goto(target, wait_until=wait_until)
+        last_error: Optional[Exception] = None
+        for attempt in range(1, retry + 1):
+            try:
+                self.page.goto(target, wait_until=wait_until)
+                last_error = None
+                break
+            except Exception as error:
+                last_error = error
+                text = str(error).strip()
+                first_line = text.splitlines()[0] if text else type(error).__name__
+                transient = any(marker in text for marker in NET_ERRORS)
+                if attempt >= retry or not transient:
+                    break
+                self.log(f"第 {attempt}/{retry} 次打开失败：{first_line}，3 秒后重试")
+                self.page.wait_for_timeout(3000)
+        if last_error is not None:
+            text = str(last_error).strip()
+            first_line = text.splitlines()[0] if text else type(last_error).__name__
+            raise StepError(
+                f"打开 {target} 失败：{first_line}"
+                "（连接被断开/超时类错误通常是代理节点不可用，可更换节点或稍后重试）"
+            )
         if not (isinstance(spec, dict) and spec.get("no_cf")):
             self._settle_cf(float(self.opt.get("cf_timeout", 30)))
 
@@ -275,8 +341,45 @@ class SiteRunner:
         script = render(script, self.ctx())
         result = self.page.evaluate("() => Boolean(" + str(script) + ")")
         if not result:
-            raise StepError(msg or f"断言不通过：{script}")
+            try:
+                body = " ".join((self.page.inner_text("body") or "").split())[:160]
+                detail = f"（当前页面：{self.page.url}；页面提示：{body}）"
+            except Exception:
+                detail = ""
+            raise StepError((msg or f"断言不通过：{script}") + detail)
         self.log("断言通过")
+
+    def act_turnstile(self, spec: Any) -> None:
+        """等待 Cloudflare Turnstile 人机验证通过并取回 token"""
+        spec = spec if isinstance(spec, dict) else {"sitekey": str(spec or "")}
+        timeout_s = float(spec.get("timeout", self.opt.get("turnstile_timeout", 60)))
+        sitekey = render(spec.get("sitekey") or "", self.ctx())
+        save_as = str(spec.get("save") or "turnstile_token")
+        deadline = time.time() + max(timeout_s, 1.0)
+        token = ""
+        rendered = False
+        while time.time() < deadline:
+            try:
+                token = self.page.evaluate(TS_POLL_JS) or ""
+            except Exception:
+                token = ""
+            if token:
+                break
+            if sitekey and not rendered:
+                rendered = True
+                try:
+                    state = self.page.evaluate(TS_RENDER_JS, sitekey)
+                    self.log(f"人机验证控件渲染：{state}")
+                except Exception as error:
+                    self.log(f"人机验证控件渲染异常：{error}")
+            self.page.wait_for_timeout(1000)
+        if not token:
+            raise StepError(
+                f"人机验证未通过（等待 {int(timeout_s)} 秒未取到 Turnstile token）。"
+                "容器内交互式验证无法自动完成，请在该账号配置里改用 cookie 方式"
+            )
+        self.vars[save_as] = token
+        self.log(f"人机验证通过，token 长度 {len(token)}")
 
     def act_api(self, spec: Any) -> None:
         """在页面内发 fetch，复用当前登录态与浏览器指纹"""

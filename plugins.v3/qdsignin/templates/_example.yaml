@@ -15,9 +15,13 @@
 #   js          {script: "() => document.title", save: title}
 #   api         {method: POST, url: /api/checkin, body: {...}, headers: {...}, ok_status: [200], save: r}
 #   assert      "document.title.includes('首页')"   JS 断言，不通过即失败
+#   turnstile   {sitekey: "0x4AAA...", timeout: 60, save: ts}  等待 Cloudflare Turnstile 通过并取 token
 #   expect      {selector: ".ok"} / {text: "签到成功"}
 #   screenshot  "checkin"                    截图到 /config/plugins/QdSignin/shots
 #   reload / back
+#
+# cookie 登录：账号配置里写 cookie: "k=v; k2=v2"，run() 会先注入，再跑 login 步骤；
+# 把整段登录用 when: "not cookie" 包起来即可自动跳过。
 #
 # 修饰键：
 #   when: "mode == 'gamble'"     条件为真才执行（Python 表达式，可用账号字段和 api 保存的变量）

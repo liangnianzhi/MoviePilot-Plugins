@@ -1,21 +1,35 @@
-# 栖影 HDHaven —— 账号密码登录 + 接口签到
-# 账号配置里可加 mode: normal / mode: gamble 决定普通签到还是赌狗签到
+# 栖影 HDHaven —— 登录 + 接口签到
+#
+# 两种登录方式，账号配置里任选其一：
+#   1) 账号密码：填 username / password。注意本站登录页强制 Cloudflare Turnstile，
+#      容器内大概率拿不到 token（会报「人机验证未通过」），此时改用方式 2。
+#   2) cookie   ：本机浏览器登录后复制 hdhaven.com 的 cookie 串（形如 "k=v; k2=v2"）
+#      填到账号的 cookie 字段，模板会自动跳过整段登录流程。
+# 账号配置里可加 mode: normal / mode: gamble 决定普通签到还是赌狗签到。
 id: hdhaven
 name: 栖影 HDHaven
 url: https://hdhaven.com
 
 login:
-  - goto: /login
-  - fill: {selector: "#username", value: "{username}"}
-  - fill: {selector: "#password", value: "{password}"}
-  - click: "button[type=submit]"
-  - wait: {ms: 4000}
+  - when: "not cookie"
+    goto: /login
+  - when: "not cookie"
+    fill: {selector: "#username", value: "{username}"}
+  - when: "not cookie"
+    fill: {selector: "#password", value: "{password}"}
+  - when: "not cookie"
+    click: "button[type=submit]"
+  - when: "not cookie"
+    turnstile: {timeout: 60, save: ts_token}
+  - when: "not cookie"
+    click: "button[type=submit]"
+  - wait: {ms: 3000}
 
 checkin:
   - goto: /me
   - assert:
       script: "location.pathname.indexOf('login') === -1"
-      msg: "登录失败：账号或密码不对，或站点要求人机验证"
+      msg: "登录失败：账号或密码不对、人机验证未通过，或 cookie 已失效"
   - api: {method: GET, url: /api/auth/me, ok_status: [200], save: me}
   - api:
       when: "mode != 'gamble' and not (me or {}).get('data', {}).get('checkin_today')"
