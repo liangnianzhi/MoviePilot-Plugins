@@ -26,7 +26,7 @@ class QdSignin(_PluginBase):
     # 插件描述
     plugin_desc = "用账号密码登录站点并自动签到，签到逻辑由 YAML 模板驱动（goto/fill/click/wait/api 等步骤）。"
     # 插件图标
-    plugin_icon = "check.png"
+    plugin_icon = "signin.png"
     # 插件版本
     plugin_version = "1.0"
     # 插件作者
